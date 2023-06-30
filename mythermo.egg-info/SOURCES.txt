@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+mythermo/Comp.py
+mythermo/__init__.py
+mythermo.egg-info/PKG-INFO
+mythermo.egg-info/SOURCES.txt
+mythermo.egg-info/dependency_links.txt
+mythermo.egg-info/requires.txt
+mythermo.egg-info/top_level.txt
