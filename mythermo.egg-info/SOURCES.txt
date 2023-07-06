@@ -1,8 +1,11 @@
 LICENSE
 README.md
 setup.py
+mythermo/ColliIntegral.py
 mythermo/Comp.py
+mythermo/Plasma.py
 mythermo/__init__.py
+mythermo/viscosity.py
 mythermo.egg-info/PKG-INFO
 mythermo.egg-info/SOURCES.txt
 mythermo.egg-info/dependency_links.txt

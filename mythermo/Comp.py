@@ -14,14 +14,16 @@ from myspecie import spc_dict
 
 class AbsComp(object):
 
-    def __init__(self, *, spcs_str: List[str]):
+    def __init__(self, *, spcs_str: List[str]) -> None:
         self.spcs_str = spcs_str
         self.n_spcs = len(spcs_str)
         self.spcs = [spc_dict[_] for _ in self.spcs_str]
         self._set_elements_by_species()
         self.Zc = [_.Zc for _ in self.spcs]
-        self.Nj = np.zeros(self.n_spcs)
-        self.lnNj = np.zeros(self.n_spcs)
+        self.relM = [_.relM for _ in self.spcs]
+        self.absM = [_.absM for _ in self.spcs]
+        # self.Nj = np.zeros(self.n_spcs)
+        # self.lnNj = np.zeros(self.n_spcs)
         self.xj = np.zeros(self.n_spcs)
         self.nj = np.zeros(self.n_spcs)
 
@@ -48,7 +50,7 @@ class AbsComp(object):
 
 class Composition(AbsComp):
 
-    def __init__(self, *, spcs_str: List[str]):
+    def __init__(self, *, spcs_str: List[str]) -> None:
         super().__init__(spcs_str=spcs_str)
         self.T_K = 0
         self.p_atm = 1
@@ -61,6 +63,7 @@ class Composition(AbsComp):
     #     self.N = self.Nj.sum()
 
     def set_lte_comp(self, *, p_atm, T_K, elem_comp) -> None:
+        elem_bj = tuple(elem_comp[_spc] for _spc in self.elems)
         self.T_K = T_K
         self.p_atm = p_atm
         Nj = np.ones(self.n_spcs) / self.n_spcs
@@ -79,7 +82,7 @@ class Composition(AbsComp):
             Mkk[:-1, -1] = np.dot(self.Aij, Nj)
             Mkk[-1, :-1] = np.dot(self.Aij, Nj)
             Mkk[-1, -1] = Nj.sum() - N
-            bk[:-1] = elem_comp - np.dot(self.Aij, Nj) + np.dot(self.Aij, Nj * rdcd_mu)
+            bk[:-1] = elem_bj - np.dot(self.Aij, Nj) + np.dot(self.Aij, Nj * rdcd_mu)
             bk[-1] = N - Nj.sum() + np.dot(Nj, rdcd_mu)
             sol = np.linalg.solve(Mkk, bk)
             dlnN = sol[-1]
@@ -90,7 +93,7 @@ class Composition(AbsComp):
                 elif dlnNj[j] >= 0:
                     factor[j] = abs((lnNj[j] - lnN + 9.210340371976182) / (dlnNj[j] - dlnN))
                 else:
-                    factor[j] = 2 / (5 * abs(dlnN)) if (abs[dlnN] > 2.5) else 1
+                    factor[j] = (2 / (5 * abs(dlnN))) if (abs(dlnN) > 2.5) else 1
             e_factor = min(1, np.min(factor))
             lnN = lnN + e_factor * dlnN
             lnNj = lnNj + e_factor * dlnNj
@@ -103,5 +106,5 @@ class Composition(AbsComp):
         self.nj = self.xj * p_atm * atm / (k * T_K)
 
     def DebL(self):
-        temp = [_spc.Zc ** 2 * self.nj[_j] for _j, _spc in enumerate(self.spcs)]
+        temp = sum(_spc.Zc ** 2 * self.nj[_j] for _j, _spc in enumerate(self.spcs))
         return 1 / sqrt(0.00020998524287342308 / self.T_K * temp)

@@ -26,8 +26,8 @@ class Spec(object):
 class AbsColliIngrl(object):
 
     def __init__(self, *, pairs_str: str, style: str, coeff_str: str):
-        spc_strs = pairs_str.split()
-        self.relM = [spec_df.loc[_str, "relM"] for _str in spc_strs]
+        self.spcs = pairs_str.split()
+        self.relM = [spec_df.loc[_str, "relM"] for _str in self.spcs]
         self.absM = [_ * relM2absM for _ in self.relM]
         self.sumM = sum(self.absM)
         self.rdcdM = self.absM[0] * self.absM[1] / \
@@ -35,12 +35,19 @@ class AbsColliIngrl(object):
         self.coeff = [float(_) for _ in coeff_str.split()]
         self.style = style
 
-    def setReducedT(self, *, T: float):
-        self.rdcdT = T
+    def setReducedT(self, *, T_K: float):
+        self.rdcdT = T_K
 
     def getColliIntegral(self, *, index: tuple):
         pass
 
+class EmptyColli(AbsColliIngrl):
+
+    def __init__(self, *, pairs_str: str, style: str, coeff_str: str):
+        super().__init__(pairs_str=pairs_str, style=style, coeff_str=coeff_str)
+
+    def getColliIntegral(self, *, index: tuple):
+        return 0
 
 # =============================================================================================== #
 class HSColli(AbsColliIngrl):
@@ -81,22 +88,36 @@ class LJColli(AbsColliIngrl):
         # 11, 12, 13, 22, 23, 24
         self.interp_f11 = interp1d(data[:, 0], data[:, 1])
         self.interp_f12 = interp1d(data[:, 0], data[:, 2])
+        self.interp_f13 = interp1d(data[:, 0], data[:, 3])
         self.interp_f22 = interp1d(data[:, 0], data[:, 4])
+        self.interp_f23 = interp1d(data[:, 0], data[:, 5])
+        self.interp_f24 = interp1d(data[:, 0], data[:, 6])
+        self.interp_f25 = interp1d(data[:, 0], data[:, 7])
+
 
     def getColliIntegral(self, *, index):
+        coeff = 0
         if index == (1, 1):
             interp_value = self.interp_f11(self.rdcdT / self.coeff[1])
-            return 1 * self.tempValue * sqrt(self.rdcdT) * interp_value
+            coeff = 1
         elif index == (1, 2):
             interp_value = self.interp_f12(self.rdcdT / self.coeff[1])
-            return 3 * self.tempValue * sqrt(self.rdcdT) * interp_value
+            coeff = 3
+        elif index == (1, 3):
+            interp_value = self.interp_f13(self.rdcdT / self.coeff[1])
+            coeff = 12
         elif index == (2, 2):
             interp_value = self.interp_f22(self.rdcdT / self.coeff[1])
-            return 2 * self.tempValue * sqrt(self.rdcdT) * interp_value
+            coeff = 2
+        elif index == (2, 3):
+            interp_value = self.interp_f23(self.rdcdT / self.coeff[1])
+            coeff = 8
+        elif index == (2, 4):
+            interp_value = self.interp_f24(self.rdcdT / self.coeff[1])
+            coeff = 40
         else:
             raise Exception("The index '{}' is error.".format(index))
-        # print(f"{self.rdcdT/self.coeff[1]}")
-        # print(f"{self.interp_f11(self.rdcdT / self.coeff[1])}")
+        return coeff * self.tempValue * sqrt(self.rdcdT) * interp_value
 
 
 # =============================================================================================== #
@@ -158,70 +179,70 @@ class ChargeExchange(AbsColliIngrl):
             raise Exception("The index '{}' is error.".format(index))
 
 
-class MorseColli(AbsColliIngrl):
+# class MorseColli(AbsColliIngrl):
 
-    def __init__(self, *, data_dict):
-        r"""
-        \phi = De * {
-        \exp(  - 2*(C / \sigma) * (r-r_e)  )
-        -2 * \exp(  - (C / \sigma) * (r-r_e)  )
-        }
+#     def __init__(self, *, data_dict):
+#         r"""
+#         \phi = De * {
+#         \exp(  - 2*(C / \sigma) * (r-r_e)  )
+#         -2 * \exp(  - (C / \sigma) * (r-r_e)  )
+#         }
 
-        where:
-        r_e / \sigma = 1 + log(2) / C
+#         where:
+#         r_e / \sigma = 1 + log(2) / C
 
-        unit:
-        De:     eV
-        r_e:    A
-        C:      1
+#         unit:
+#         De:     eV
+#         r_e:    A
+#         C:      1
 
-        """
-        super().__init__(data_dict=data_dict)
-        self._setParas()
+#         """
+#         super().__init__(data_dict=data_dict)
+#         self._setParas()
 
-    def _setParas(self):
-        assert self.Poten == "Morse"
-        if 4 < self.Paras["C"] <= 20:
-            log_C = np.log10([4, 6, 8, 20])
-            log_T = np.log10(
-                [0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 1, 2, 4, 10, 20, 40, 100, 200])
-            _pos_11 = (3, 15)
-            _pos_22 = (43, 15)
-        elif 2 <= self.Paras["C"] <= 4:
-            log_C = np.log10([2, 4])
-            log_T = np.log10([0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 1, 2, 4])
-            _pos_11 = (20, 10)
-            _pos_22 = (60, 10)
-        elif 1 <= self.Paras["C"] < 2:
-            log_C = np.log10([1, 2])
-            log_T = np.log10([0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4])
-            _pos_11 = (32, 7)
-            _pos_22 = (72, 7)
-        else:
-            raise Exception("The C {} is error".format(self.Paras["C"]))
-        data_11 = np.loadtxt("factor/Morse-factor.txt", delimiter=",", skiprows=_pos_11[0],
-                             max_rows=_pos_11[1])
-        coef_11 = interp1d(log_C, data_11)(np.log10(self.Paras["C"]))
-        self.f_11 = interp1d(log_T, coef_11)
-        data_22 = np.loadtxt("factor/Morse-factor.txt", delimiter=",", skiprows=_pos_22[0],
-                             max_rows=_pos_22[1])
-        coef_22 = interp1d(log_C, data_22)(np.log10(self.Paras["C"]))
-        self.f_22 = interp1d(log_T, coef_22)
-        sigma = self.Paras["C"] * self.Paras["re"] / (self.Paras["C"] + log(2))
-        print(sigma)
-        self.tempValue = sqrt(_kB / 2 / pi / self.rdcdM) * \
-                         pi * sigma ** 2 * 1e-20
+#     def _setParas(self):
+#         assert self.Poten == "Morse"
+#         if 4 < self.Paras["C"] <= 20:
+#             log_C = np.log10([4, 6, 8, 20])
+#             log_T = np.log10(
+#                 [0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 1, 2, 4, 10, 20, 40, 100, 200])
+#             _pos_11 = (3, 15)
+#             _pos_22 = (43, 15)
+#         elif 2 <= self.Paras["C"] <= 4:
+#             log_C = np.log10([2, 4])
+#             log_T = np.log10([0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4, 1, 2, 4])
+#             _pos_11 = (20, 10)
+#             _pos_22 = (60, 10)
+#         elif 1 <= self.Paras["C"] < 2:
+#             log_C = np.log10([1, 2])
+#             log_T = np.log10([0.004, 0.01, 0.02, 0.04, 0.1, 0.2, 0.4])
+#             _pos_11 = (32, 7)
+#             _pos_22 = (72, 7)
+#         else:
+#             raise Exception("The C {} is error".format(self.Paras["C"]))
+#         data_11 = np.loadtxt("factor/Morse-factor.txt", delimiter=",", skiprows=_pos_11[0],
+#                              max_rows=_pos_11[1])
+#         coef_11 = interp1d(log_C, data_11)(np.log10(self.Paras["C"]))
+#         self.f_11 = interp1d(log_T, coef_11)
+#         data_22 = np.loadtxt("factor/Morse-factor.txt", delimiter=",", skiprows=_pos_22[0],
+#                              max_rows=_pos_22[1])
+#         coef_22 = interp1d(log_C, data_22)(np.log10(self.Paras["C"]))
+#         self.f_22 = interp1d(log_T, coef_22)
+#         sigma = self.Paras["C"] * self.Paras["re"] / (self.Paras["C"] + log(2))
+#         print(sigma)
+#         self.tempValue = sqrt(_kB / 2 / pi / self.rdcdM) * \
+#                          pi * sigma ** 2 * 1e-20
 
-    def getColliIntegral(self, *, index):
-        De_T = self.Paras["De"] * _eV2K
-        if index == (1, 1):
-            return self.f_11(
-                np.log10(self.rdcdT / De_T)) * self.tempValue * sqrt(self.rdcdT) * 1
-        if index == (2, 2):
-            return self.f_22(
-                np.log10(self.rdcdT / De_T)) * self.tempValue * sqrt(self.rdcdT) * 2
-        else:
-            raise Exception("The index '{}' is error".format(index))
+#     def getColliIntegral(self, *, index):
+#         De_T = self.Paras["De"] * _eV2K
+#         if index == (1, 1):
+#             return self.f_11(
+#                 np.log10(self.rdcdT / De_T)) * self.tempValue * sqrt(self.rdcdT) * 1
+#         if index == (2, 2):
+#             return self.f_22(
+#                 np.log10(self.rdcdT / De_T)) * self.tempValue * sqrt(self.rdcdT) * 2
+#         else:
+#             raise Exception("The index '{}' is error".format(index))
 
 
 # =============================================================================================== #
@@ -241,8 +262,26 @@ class ScreenCoulombColli(AbsColliIngrl):
         l, s = index
         beta = 1.03
         Z1, Z2 = self.coeff
-        b0 = 1 / 8 / pi / epsilon_0 * self.coeff[0] * Z1 * Z2 * const.e ** 2 / kB / self.rdcdT
+        b0 = 1 / 8 / pi / epsilon_0 * abs(Z1 * Z2) * const.e ** 2 / kB / self.rdcdT
         L = 2 * DebL / beta / b0
+        ##
+        # print(f"L = {L}")
+        # print(f"temp = {2 * pi * kB * self.rdcdT / self.rdcdM}")
+        # print(f"gamma={gamma(s)}")
+        ##
         Psi = 0 if (s == 1) else (sum(1 / n for n in range(1, s)))
-        return l * sqrt(2 * pi * kB * self.rdcdT / self.rdcdM) * beta ** 2 * b0 ** 2 * gamma(s) * \
-            (ln(L) - l / 2 - 2 * 0.57722 + Psi)
+        tmp1 = l * sqrt(2 * pi * kB * self.rdcdT / self.rdcdM) * beta ** 2 * b0 ** 2
+        tmp2 = gamma(s)
+        tmp3 = (ln(L) - l / 2 - 2 * 0.57722 + Psi)
+        return tmp1 * tmp2 * tmp3
+        # return l * sqrt(2 * pi * kB * self.rdcdT / self.rdcdM) * beta ** 2 * b0 ** 2 * gamma(s) * \
+        #     (ln(L) - l / 2 - 2 * 0.57722 + Psi)
+
+class TableColliIntegral(AbsColliIngrl):
+
+    def __init__(self, *, pairs_str: str, style: str, coeff_str: str):
+        super().__init__(pairs_str=pairs_str, style=style, coeff_str=coeff_str)
+
+    def getColliIntegral(self, *, index: tuple):
+        pass
+        # return super().getColliIntegral(index=index)
