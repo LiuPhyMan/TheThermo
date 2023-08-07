@@ -61,6 +61,11 @@ class Composition(AbsComp):
     # def set_Nj(self, *, Nj):
     #     self.Nj = Nj
     #     self.N = self.Nj.sum()
+    def get_rho(self):
+        return np.dot(self.nj, self.absM)
+
+    def get_H(self, *, T_K: float):
+        return np.dot(self.nj, [_spc.get_h(T_K=T_K) for _spc in self.spcs]) / self.get_rho()
 
     def set_lte_comp(self, *, p_atm, T_K, elem_comp) -> None:
         elem_bj = tuple(elem_comp[_spc] for _spc in self.elems)

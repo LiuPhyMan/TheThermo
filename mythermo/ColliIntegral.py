@@ -2,7 +2,7 @@ from math import pi, log, sqrt, log10, gamma, exp
 from math import log as ln
 from math import factorial, isclose
 import numpy as np
-from mymath import integrate_by_DCT
+from mymath import integrate_by_DCT, ls_index
 import myconst as const
 from myconst import eV2J, J2eV, K2J, J2K, eV2K, K2eV, relM2absM, e2, epsilon_0
 from myconst import k as kB
@@ -44,6 +44,10 @@ class AbsColliIngrl(object):
 
     def setReducedT(self, *, T_K: float):
         self.rdcdT = T_K
+
+    def get_avg_CS(self, *, index: tuple):
+        return self.getColliIntegral(index=index)/sqrt(kB*self.rdcdT/2/pi/self.rdcdM)/ \
+            ls_index(index[0], index[1])
 
     def getColliIntegral(self, *, index: tuple):
         pass
@@ -179,7 +183,7 @@ class AbsImpovedLJColli(AbsColliIngrl):
         # sigma = 0.8002 * self.coeff[0] ** 0.049256 * self.coeff[2]
         sigma = self._coef[0]*self.coeff[0]**self._coef[1]*self.coeff[2]
         convert_factor = factor*pi*sigma**2*sqrt(kB*self.rdcdT/2/pi/self.rdcdM)
-        return self.get_rdcd_ci(index=index)*convert_factor * 1e-20
+        return self.get_rdcd_ci(index=index)*convert_factor*1e-20
 
 
 class LJm6ColliIntegral(AbsImpovedLJColli):
@@ -273,6 +277,7 @@ class CEinCI(AbsColliIngrl):
             return 0
             # raise Exception("The index '{}' is error.".format(index))
 
+
 # ----------------------------------------------------------------------------------------------- #
 class CECI(AbsColliIngrl):
 
@@ -304,6 +309,7 @@ class CECI(AbsColliIngrl):
             return sqrt(CI0**2 + CI1**2)
         else:
             return self.CEel.getColliIntegral(index=index)
+
 
 # class MorseColli(AbsColliIngrl):
 
@@ -384,6 +390,10 @@ class ScreenCoulombColli(AbsColliIngrl):
         """
         super().__init__(pairs_str=pairs_str, style=style, coeff_str=coeff_str)
         self.coeff = [float(_) for _ in coeff_str.split()]
+
+    def get_avg_CS(self, *, index: tuple, DebL: float):
+        return self.getColliIntegral(index=index, DebL=DebL)/ \
+            sqrt(kB*self.rdcdT/2/pi/self.rdcdM)/ls_index(index[0], index[1])
 
     def getColliIntegral(self, *, index: tuple, DebL: float):
         l, s = index
