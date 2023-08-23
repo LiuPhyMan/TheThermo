@@ -1,19 +1,31 @@
 import re
 from math import sqrt, pi
+
 import numpy as np
 from myconst import k as kB, m_e, eV2J
 from mymath import coeff1, coeff2
-from .Comp import Composition
+
 from .ColliIntegral import (EmptyColli,
                             LJm6ColliIntegral,
                             CECI,
                             EleNeuColliIntegral,
                             ScreenCoulombColli)
+from .Comp import Composition
 
 
 class LTEPlasma(object):
+    __slots__ = ["comp",
+                 "p_atm", "T_K",
+                 "rctn", "n_rctn", "rctn_Rik",
+                 "ci_paras_list", "ci_engine"]
 
     def __init__(self, *, spcs_str):
+        r"""
+
+        Parameters
+        ----------
+        spcs_str
+        """
         assert spcs_str[0] == "e"
         self.comp = Composition(spcs_str=spcs_str)
         self.p_atm = None
@@ -270,9 +282,7 @@ class LTEPlasma(object):
                                self.rctn_Rik[i, l]*self.rctn_Rik[j, l]*self.comp.xj[k]/ \
                                self.comp.xj[l]
                         tmp = tmp + tmp1*self._mu_ij(k, l)*self.Omega_ij(k, l, index=(1, 1))
-                Aij[i, j] = tmp * 16/(3*kB*self.T_K)
-        dH = np.dot(self.rctn_Rik, [_spc.Hf for _spc in self.comp.spcs]) * eV2J
+                Aij[i, j] = tmp*16/(3*kB*self.T_K)
+        dH = np.dot(self.rctn_Rik, [_spc.Hf for _spc in self.comp.spcs])*eV2J
         b = np.linalg.solve(Aij, dH)
         return 1/kB/self.T_K**2*np.dot(dH, b)
-
-

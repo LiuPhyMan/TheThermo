@@ -5,9 +5,11 @@ mythermo/ColliIntegral.py
 mythermo/Comp.py
 mythermo/Plasma.py
 mythermo/__init__.py
+mythermo/basic.py
 mythermo/viscosity.py
 mythermo.egg-info/PKG-INFO
 mythermo.egg-info/SOURCES.txt
 mythermo.egg-info/dependency_links.txt
 mythermo.egg-info/requires.txt
 mythermo.egg-info/top_level.txt
+mythermo/rad/__init__.py
