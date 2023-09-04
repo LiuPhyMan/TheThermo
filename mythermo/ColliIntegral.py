@@ -4,7 +4,7 @@ from math import factorial, isclose
 import numpy as np
 from mymath import integrate_by_DCT, ls_index
 import myconst as const
-from myconst import eV2J, J2eV, K2J, J2K, eV2K, K2eV, relM2absM, e2, epsilon_0
+from myconst import eV2J, J2eV, K2J, J2K, eV2K, K2eV, relM2absM, epsilon_0
 from myconst import k as kB
 from myspecie import spec_df
 from scipy import constants as const
@@ -13,8 +13,6 @@ from scipy.constants import m_u as _m_u
 from scipy.interpolate import interp1d
 
 __all__ = ["ExpColli", "LJColli", "ScreenCoulombColli"]
-
-_e2 = 2.30708e-28
 
 # import os
 # print(os.path.abspath(__path__))

@@ -17,7 +17,7 @@ class EmptyCS(object):
     def __init__(self):
         pass
 
-    def norm_cs(self, *, nu: float, T_K: float) -> float:
+    def norm_cs(self, *, nuHz: float, T_K: float) -> float:
         return 0
 
 
@@ -27,14 +27,14 @@ class PhoiCS(object):
     def __init__(self, *, df_file):
         self._df = read_csv(df_file, index_col=0)
 
-    def norm_cs(self, *, nu: float, T_K: float) -> float:
+    def norm_cs(self, *, nuHz: float, T_K: float) -> float:
         tmp = 0
         Pn = 1
         for _id in self._df.index:
-            if nu*Hz2eV <= self._df.loc[_id, "Eth_eV"]:
+            if nuHz*Hz2eV <= self._df.loc[_id, "Eth_eV"]:
                 continue
             else:
-                cs = 2.815404e+25*nu**(-3)*self._df.loc[_id, "Zeff"]**4/self._df.loc[_id, "n"]**5
+                cs = 2.815404e+25*nuHz**(-3)*self._df.loc[_id, "Zeff"]**4/self._df.loc[_id, "n"]**5
                 Qj = self._df.loc[_id, "g"]*exp(-self._df.loc[_id, "E"]/(T_K*K2eV))
                 tmp = tmp + cs*Qj
         return tmp
