@@ -3,7 +3,7 @@ from math import sqrt, pi
 
 import numpy as np
 from myconst import k as kB, m_e, eV2J
-from mymath import coeff1, coeff2
+from mymath import M_coeff_1, M_coeff_2, N_coeff_1, N_coeff_2
 
 from .ColliIntegral import (EmptyColli,
                             LJm6ColliIntegral,
@@ -32,9 +32,9 @@ class LTEPlasma(object):
         self.T_K = None
         self.ci_paras_list = None
 
-    def set_pAtm(self, *, p_atm: float) -> None:
-        assert p_atm > 0
-        self.p_atm = p_atm
+    # def set_pAtm(self, *, p_atm: float) -> None:
+    #     assert p_atm > 0
+    #     self.p_atm = p_atm
 
     def set_T_K(self, *, T_K: float) -> None:
         assert T_K > 0
@@ -130,7 +130,9 @@ class LTEPlasma(object):
     # ------------------------------------------------------------------------------------------- #
     # Cal viscosity
     # ------------------------------------------------------------------------------------------- #
-    def get_H_mtx(self, *, p, q):
+    def get_H_mtx(self, *, p, q, T_K):
+        if p > q:
+            return self.get_H_mtx(p=q, q=p, T_K=T_K).transpose()
         # Init
         A1 = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
         A2 = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
@@ -141,17 +143,19 @@ class LTEPlasma(object):
             for jCol in range(self.comp.n_spcs):
                 M1 = self.comp.relM[iRow]/(self.comp.relM[iRow] + self.comp.relM[jCol])
                 M2 = self.comp.relM[jCol]/(self.comp.relM[iRow] + self.comp.relM[jCol])
-                self.ci_engine[iRow][jCol].setReducedT(T_K=self.T_K)
+                self.ci_engine[iRow][jCol].setReducedT(T_K=T_K)
                 tmp = 0
-                for _c in coeff1(p, q):
+                for _c in M_coeff_1(p, q):
                     omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
                     tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
-                A1[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+                # A1[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+                A1[iRow, jCol] = tmp*self.comp.xj[jCol]
                 tmp = 0
-                for _c in coeff2(p, q):
+                for _c in M_coeff_2(p, q):
                     omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
                     tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
-                A2[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+                # A2[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+                A2[iRow, jCol] = tmp*self.comp.xj[jCol]
         # --------------------------------------------------------------------------------------- #
         # Set H matrix from A1, A2.
         for iRow in range(self.comp.n_spcs):
@@ -161,18 +165,62 @@ class LTEPlasma(object):
                     H[iRow, jCol] += np.sum(A1[iRow])
         H = H*2/5/kB/self.T_K
         return H
+    
+    def get_L_mtx(self, *, p, q, T_K):
+        if p > q:
+            return self.get_L_mtx(p=q, q=p, T_K=T_K).transpose()
+        # Init
+        L = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
+        N1 = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
+        N2 = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
+        # ---------------------------------------------------------------------------------------- #
+        # Set N1, N2
+        for iRow in range(self.comp.n_spcs):
+            for jCol in range(self.comp.n_spcs):
+                M1 = self.comp.relM[iRow]/(self.comp.relM[iRow] + self.comp.relM[jCol])
+                M2 = self.comp.relM[jCol]/(self.comp.relM[iRow] + self.comp.relM[jCol])
+                self.ci_engine[iRow][jCol].setReducedT(T_K=T_K)
+                tmp = 0
+                for _c in N_coeff_1(p, q):
+                    omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
+                    tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
+                N1[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+                tmp = 0
+                for _c in N_coeff_2(p, q):
+                    omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
+                    tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
+                N2[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
+        # Set L matrix from N1, N2
+        for iRow in range(self.comp.n_spcs):
+            for jCol in range(self.comp.n_spcs):
+                L[iRow, jCol] = N2[iRow, jCol]
+                if iRow == jCol:
+                    L[iRow, jCol] += np.sum(N1[iRow])
+                L[iRow, jCol] = L[iRow, jCol] * sqrt(self.comp.absM[iRow]*self.comp.absM[jCol])
+        L = L * 8 / 75/kB**2/self.T_K
+        return L
 
     def get_eta_order_2(self, *, T_K: float) -> float:
-        H00 = self.get_H_mtx(p=0, q=0)
-        H01 = self.get_H_mtx(p=0, q=1)
-        H11 = self.get_H_mtx(p=1, q=1)
-        b20 = np.linalg.solve(H00 - np.dot(H01.dot(np.linalg.inv(H11)), H10), 2/kB/T*self.comp.xj)
-        return 1/2*kB*T*np.dot(self.comp.xj, b20)
+        H00 = self.get_H_mtx(p=0, q=0, T_K=T_K)
+        H01 = self.get_H_mtx(p=0, q=1, T_K=T_K)
+        H10 = self.get_H_mtx(p=1, q=0, T_K=T_K)
+        H11 = self.get_H_mtx(p=1, q=1, T_K=T_K)
+        H = np.vstack((np.hstack((H00, H01)),
+                       np.hstack((H10, H11))))
+        # print(H)
+        # print(f"{T_K:.0f},{np.linalg.det(H):.2e}")
+        x = np.hstack((np.ones(self.comp.n_spcs), np.zeros(self.comp.n_spcs)))
+        b = np.linalg.solve(H, x)
+        # b = np.linalg.solve(H00 - np.dot(np.dot(H01, np.linalg.inv(H11)), H10), 
+        #                 np.ones(self.comp.n_spcs))
+        # return np.dot(self.comp.xj, b)
+        # print(b)
+        return np.dot(self.comp.xj, b[:self.comp.n_spcs])
 
     def get_eta_order_1(self, *, T_K: float) -> float:
         H00 = self.get_H_mtx(p=0, q=0)
-        b10 = np.linalg.solve(H00, 2/kB/T_K*self.comp.xj)
-        return 1/2*kB*T_K*np.dot(self.comp.xj, b10)
+        b10 = np.linalg.solve(H00, np.ones(self.comp.n_spcs))
+        return np.dot(self.comp.xj, b10)
 
     # ------------------------------------------------------------------------------------------- #
     def _mu_ij(self, i, j):
@@ -184,7 +232,7 @@ class LTEPlasma(object):
     # ------------------------------------------------------------------------------------------- #
     #   Cal k_hp
     # ------------------------------------------------------------------------------------------- #
-    def get_L_mtx(self):
+    def _get_L_mtx(self):
         L = np.zeros((self.comp.n_spcs, self.comp.n_spcs))
         # --------------------------------------------------------------------------------------- #
         # set Lii
@@ -221,11 +269,29 @@ class LTEPlasma(object):
                                                                              j)/kB**2/self.T_K*mu_i*mu_j*tmp1
         return L
 
-    def get_k_hp_order_2(self):
+    def get_k_hp_order_2(self, *, T_K):
         # b = np.linalg.solve(self.get_L_mtx(), self.comp.xj)
         # return 4*np.dot(self.comp.xj, b)
-        inv_L_mtx = np.linalg.inv(self.get_L_mtx()[1:, 1:])
-        return -4*np.dot(self.comp.xj[1:].dot(inv_L_mtx), self.comp.xj[1:])
+        L00 = self.get_L_mtx(p=0, q=0, T_K=T_K)
+        L01 = self.get_L_mtx(p=0, q=1, T_K=T_K)
+        L02 = self.get_L_mtx(p=0, q=2, T_K=T_K)
+        L10 = self.get_L_mtx(p=1, q=0, T_K=T_K)
+        L11 = self.get_L_mtx(p=1, q=1, T_K=T_K)
+        L12 = self.get_L_mtx(p=1, q=2, T_K=T_K)
+        L20 = self.get_L_mtx(p=2, q=0, T_K=T_K)
+        L21 = self.get_L_mtx(p=2, q=1, T_K=T_K)
+        L22 = self.get_L_mtx(p=2, q=2, T_K=T_K)
+        L = np.vstack((np.hstack((L00, L01, L02)),
+                       np.hstack((L10, L11, L12)),
+                       np.hstack((L20, L21, L22))))
+        x = np.hstack((np.zeros(self.comp.n_spcs), self.comp.xj, np.zeros(self.comp.n_spcs)))
+        a = np.linalg.solve(L, x)
+        # return np.dot(self.comp.xj, a[self.comp.n_spcs:(2*self.comp.n_spcs)])
+        return np.dot(self.comp.xj[1:], a[(self.comp.n_spcs+1):(2*self.comp.n_spcs)])
+
+
+        # inv_L_mtx = np.linalg.inv(self.get_L_mtx()[1:, 1:])
+        # return -4*np.dot(self.comp.xj[1:].dot(inv_L_mtx), self.comp.xj[1:])
 
     # ------------------------------------------------------------------------------------------- #
     #   Cal k_e

@@ -265,14 +265,18 @@ class CEinCI(AbsColliIngrl):
         alpha = pi**2/6 - sum(1/n**2 for n in range(1, s + 2))
         temp = B**2/4*((ln(2*kB*self.rdcdT*1e4/self.rdcdM) - 2*A/B + xi)
                        **2 + alpha)*sqrt(kB*self.rdcdT/2/pi/self.rdcdM)*1e-20
-        if index == (1, 1):
-            return temp*1
-        elif index == (1, 2):
-            return temp*3
-        elif index == (2, 2):
-            return 0
+        if l%2 == 1:
+            return temp * ls_index(l, s)
         else:
             return 0
+        # if index == (1, 1):
+        #     return temp*ls_index(l, s)
+        # elif index == (1, 2):
+        #     return temp*3
+        # elif index == (2, 2):
+        #     return 0
+        # else:
+        #     return 0
             # raise Exception("The index '{}' is error.".format(index))
 
 
@@ -301,7 +305,7 @@ class CECI(AbsColliIngrl):
         self.CEin.setReducedT(T_K=T_K)
 
     def getColliIntegral(self, *, index: tuple):
-        if isclose(index[0], 1):
+        if isclose(index[0]%2, 1):
             CI0 = self.CEel.getColliIntegral(index=index)
             CI1 = self.CEin.getColliIntegral(index=index)
             return sqrt(CI0**2 + CI1**2)
