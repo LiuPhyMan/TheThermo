@@ -167,6 +167,12 @@ class LTEPlasma(object):
         return H
     
     def get_L_mtx(self, *, p, q, T_K):
+        def get_c(_cc):
+            if isinstance(_cc, tuple):
+                return _cc[0] * _cc[1]
+            else:
+                return _cc
+            
         if p > q:
             return self.get_L_mtx(p=q, q=p, T_K=T_K).transpose()
         # Init
@@ -183,12 +189,12 @@ class LTEPlasma(object):
                 tmp = 0
                 for _c in N_coeff_1(p, q):
                     omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
-                    tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
+                    tmp += get_c(_c[0])*(M1**_c[1][0])*(M2**_c[1][1])*omega
                 N1[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
                 tmp = 0
                 for _c in N_coeff_2(p, q):
                     omega = self.Omega_ij(iRow=iRow, jCol=jCol, index=_c[2])
-                    tmp += _c[0]*(M1**_c[1][0])*(M2**_c[1][1])*omega
+                    tmp += get_c(_c[0])*(M1**_c[1][0])*(M2**_c[1][1])*omega
                 N2[iRow, jCol] = tmp*self.comp.xj[iRow]*self.comp.xj[jCol]
         # Set L matrix from N1, N2
         for iRow in range(self.comp.n_spcs):
@@ -293,6 +299,32 @@ class LTEPlasma(object):
         # inv_L_mtx = np.linalg.inv(self.get_L_mtx()[1:, 1:])
         # return -4*np.dot(self.comp.xj[1:].dot(inv_L_mtx), self.comp.xj[1:])
 
+    def get_k_hp_order_3(self, *, T_K):
+        L00 = self.get_L_mtx(p=0, q=0, T_K=T_K)
+        L01 = self.get_L_mtx(p=0, q=1, T_K=T_K)
+        L02 = self.get_L_mtx(p=0, q=2, T_K=T_K)
+        L03 = self.get_L_mtx(p=0, q=3, T_K=T_K)
+        L10 = self.get_L_mtx(p=1, q=0, T_K=T_K)
+        L11 = self.get_L_mtx(p=1, q=1, T_K=T_K)
+        L12 = self.get_L_mtx(p=1, q=2, T_K=T_K)
+        L13 = self.get_L_mtx(p=1, q=3, T_K=T_K)
+        L20 = self.get_L_mtx(p=2, q=0, T_K=T_K)
+        L21 = self.get_L_mtx(p=2, q=1, T_K=T_K)
+        L22 = self.get_L_mtx(p=2, q=2, T_K=T_K)
+        L23 = self.get_L_mtx(p=2, q=3, T_K=T_K)
+        L30 = self.get_L_mtx(p=3, q=0, T_K=T_K)
+        L31 = self.get_L_mtx(p=3, q=1, T_K=T_K)
+        L32 = self.get_L_mtx(p=3, q=2, T_K=T_K)
+        L33 = self.get_L_mtx(p=3, q=3, T_K=T_K)
+        L = np.vstack((np.hstack((L00, L01, L02, L03)),
+                       np.hstack((L10, L11, L12, L13)),
+                       np.hstack((L20, L21, L22, L23)),
+                       np.hstack((L30, L31, L32, L33))))
+        x = np.hstack((np.zeros(self.comp.n_spcs), self.comp.xj, 
+                       np.zeros(self.comp.n_spcs), np.zeros(self.comp.n_spcs)))
+        a = np.linalg.solve(L, x)
+        return np.dot(self.comp.xj, a[self.comp.n_spcs:2*self.comp.n_spcs])
+        
     # ------------------------------------------------------------------------------------------- #
     #   Cal k_e
     # ------------------------------------------------------------------------------------------- #
