@@ -41,6 +41,9 @@ class LTEPlasma(object):
         self.T_K = T_K
         self.comp.T_K = T_K
 
+    def set_elements(self, elems: tuple):
+        self.comp.set_elements(elems)
+
     def set_reactions(self, *, rctn_list):
         self.rctn = rctn_list
         self.n_rctn = len(self.rctn)
@@ -224,7 +227,7 @@ class LTEPlasma(object):
         return np.dot(self.comp.xj, b[:self.comp.n_spcs])
 
     def get_eta_order_1(self, *, T_K: float) -> float:
-        H00 = self.get_H_mtx(p=0, q=0)
+        H00 = self.get_H_mtx(p=0, q=0, T_K=T_K)
         b10 = np.linalg.solve(H00, np.ones(self.comp.n_spcs))
         return np.dot(self.comp.xj, b10)
 

@@ -59,6 +59,13 @@ class AbsComp(object):
         self.n_elem = len(self.elems)
         self._set_Aij()
 
+    @property
+    def nj_dict(self):
+        _dct = dict()
+        for i in range(self.n_spcs):
+            _dct[self.spcs_str[i]] = self.nj[i]
+        return _dct
+
 
 class Composition(AbsComp):
     __slots__ = ("p_atm", "T_K", "bf_cs",)
@@ -92,6 +99,9 @@ class Composition(AbsComp):
     def Zeff(self):
         return (self.Zc**2*self.nj)[self.Zc >0].sum() / (self.Zc*self.nj)[self.Zc >0].sum()
 
+    @property
+    def eleFreq(self):
+        return 8.97866758337293 * sqrt(self.ne)
 
     # @property
     # def avgZc(self):
@@ -126,9 +136,9 @@ class Composition(AbsComp):
     def j_fb_Hz(self, *, nuHz: float, T_K: float) -> float:
         return self.kappa_bf(nuHz=nuHz, T_K=T_K)*Bnu(nuHz=nuHz, T_K=T_K)
 
-    def avg_j_fb_Hz(self, *, wv_rng: WVRng, T_K: float) -> float:
+    def avg_j_fb_Hz(self, *, wv_rng: WVRng, T_K: float, num_point:int=100) -> float:
         j_seq = [self.j_fb_Hz(nuHz=_nu, T_K=T_K)
-                 for _nu in np.linspace(wv_rng.nuHz[0], wv_rng.nuHz[1], num=100)]
+                 for _nu in np.linspace(wv_rng.nuHz[0], wv_rng.nuHz[1], num=num_point)]
         return np.mean(j_seq)
 
     def kappa_bf(self, *, nuHz: float, T_K: float) -> float:
@@ -209,6 +219,13 @@ class Composition(AbsComp):
         V = Nj.sum()*kB*T_K/(p_atm*atm)
         self.xj = Nj/Nj.sum()
         self.nj = self.xj*p_atm*atm/(kB*T_K)
+
+    def set_comp_by_dict(self, *, _dict: dict, default_value=0):
+        self.nj = np.zeros(self.n_spcs)
+        for _spc in _dict:
+            assert _spc in self.spcs_str
+            self.nj[self.spcs_str.index(_spc)] = _dict[_spc]
+        self.xj = self.nj/self.nj.sum()
 
     def DebL(self):
         temp = sum(_spc.Zc**2*self.nj[_j] for _j, _spc in enumerate(self.spcs))

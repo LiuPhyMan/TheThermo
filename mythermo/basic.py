@@ -1,7 +1,7 @@
-from math import exp
+from math import exp, pi, sqrt, log
 
 import numpy as np
-from myconst import c as light_c, h, Hz2K, nm2Hz_f, nm2cm
+from myconst import c as light_c, h, Hz2K, nm2Hz_f, nm2cm, h, m_e, kB
 
 
 def Bnu(*, nuHz, T_K):
@@ -45,3 +45,10 @@ class WavelengthRange(object):
         self.D_nuHz = self.nuHz[1] - self.nuHz[0]
         self.D_wvncm = self.wvncm[1] - self.wvncm[0]
         self.D_TempK = self.TempK[1] - self.TempK[0]
+
+def Le_th(T_K: float) -> float:
+    return h/sqrt(2*pi*m_e*kB*T_K)
+
+def CoulombLogarithm(*, ne: float, T_K: float, Zi:int=1) -> float:
+    r"""Standard unit."""
+    return 15.233732608189301 + 1.5*log(T_K) - 0.5*log(ne) - log(Zi)
