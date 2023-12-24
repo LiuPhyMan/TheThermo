@@ -227,6 +227,7 @@ class LTEPlasma(object):
         return np.dot(self.comp.xj, b[:self.comp.n_spcs])
 
     def get_eta_order_1(self, *, T_K: float) -> float:
+        # H x = b
         H00 = self.get_H_mtx(p=0, q=0, T_K=T_K)
         b10 = np.linalg.solve(H00, np.ones(self.comp.n_spcs))
         return np.dot(self.comp.xj, b10)

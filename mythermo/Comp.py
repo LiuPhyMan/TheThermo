@@ -5,12 +5,12 @@
 @time: 23.May.2023
 """
 
-from math import sqrt, log, exp
+from math import sqrt, log, exp, pi
 from typing import List
 
+import myconst as cns
 import numpy as np
-from myconst import (atm, light_c, K2J, K2Hz, Hz2K, h, nm2m, nm2Hz_f,
-                     k as kB, nm2Hz_f)
+from myconst import (atm, Hz2K, k as kB, e, epsilon_0)
 from myspecie import spc_dict
 from mythermo.basic import avgBnu, WavelengthRange as WVRng
 from mythermo.rad import PhoiCS, EmptyCS, bfCS_file_dict
@@ -46,6 +46,8 @@ class AbsComp(object):
                 self.Aij[_i, _j] = self.spcs[_j].get_nElem(self.elems[_i])
 
     def _set_elements_by_species(self):
+        # Aij = [ 1 0 1
+        #         0 1 0]
         elems = []
         for _spcs in self.spcs:
             elems = elems + list(_spcs.elems.keys())
@@ -97,11 +99,20 @@ class Composition(AbsComp):
 
     @property
     def Zeff(self):
-        return (self.Zc**2*self.nj)[self.Zc >0].sum() / (self.Zc*self.nj)[self.Zc >0].sum()
+        return (self.Zc**2*self.nj)[self.Zc > 0].sum()/(self.Zc*self.nj)[self.Zc > 0].sum()
 
     @property
     def eleFreq(self):
-        return 8.97866758337293 * sqrt(self.ne)
+        return 8.97866758337293*sqrt(self.ne)
+
+    @property
+    def norm_field(self):
+        tmp = (self.Zc*self.nj**(2/3))[self.Zc > 0].sum()
+        return 0.5*(4/15)**(2/3)*e/epsilon_0*tmp
+
+    @property
+    def ion_distn(self):
+        return (self.nj[self.Zc > 0].sum()*4*pi/3)**(-1/3)
 
     # @property
     # def avgZc(self):
@@ -115,20 +126,23 @@ class Composition(AbsComp):
     # free-free transition
     # ------------------------------------------------------------------------------------------- #
     def j_ff_Hz(self, *, nuHz: float, T_K: float) -> float:
-        r""" """
+        r""" Bremsstrahlung (free-free emission) per Hz in the unit of W m^-2 sr^-1 Hz^-1 """
         return 5.4443668e-52/sqrt(T_K)*(self.Zeff*self.ne**2)*exp(-nuHz*Hz2K/T_K)
+
+    def j_ff_m(self, *, wvlnm: float, T_K: float) -> float:
+        r""" Bremsstrahlung (free-free emission) per m in the unit of W m^-2 sr^-1 m^-1 """
+        return self.j_ff_Hz(nuHz=cns.nm2Hz_f(wvlnm), T_K=T_K)*cns.light_c/(wvlnm*cns.nm2m)**2
 
     def avg_j_ff_Hz(self, *, wv_rng: WVRng, T_K: float) -> float:
         r""" """
-        return 1.1344220e-41*sqrt(T_K)*(self.Zeff*self.ne**2) * exp(-wv_rng.TempK[0]/T_K)*\
-            (1 - exp(-wv_rng.D_TempK/T_K)) / wv_rng.D_nuHz
+        return 1.1344220e-41*sqrt(T_K)*(self.Zeff*self.ne**2)*exp(-wv_rng.TempK[0]/T_K)* \
+            (1 - exp(-wv_rng.D_TempK/T_K))/wv_rng.D_nuHz
 
     def kappa_ff(self, *, nuHz: float, T_K: float) -> float:
         return self.j_ff_Hz(nuHz=nuHz, T_K=T_K)/Bnu(nuHz=nuHz, T_K=T_K)
 
     def avg_kappa_ff(self, *, wv_rng: WVRng, T_K: float) -> float:
-        return self.avg_j_ff_Hz(wv_rng=wv_rng, T_K=T_K) / avgBnu(nuHz_rng=wv_rng.nuHz, T_K=T_K)
-
+        return self.avg_j_ff_Hz(wv_rng=wv_rng, T_K=T_K)/avgBnu(nuHz_rng=wv_rng.nuHz, T_K=T_K)
 
     # ------------------------------------------------------------------------------------------- #
     # free-bound transition
@@ -136,7 +150,10 @@ class Composition(AbsComp):
     def j_fb_Hz(self, *, nuHz: float, T_K: float) -> float:
         return self.kappa_bf(nuHz=nuHz, T_K=T_K)*Bnu(nuHz=nuHz, T_K=T_K)
 
-    def avg_j_fb_Hz(self, *, wv_rng: WVRng, T_K: float, num_point:int=100) -> float:
+    def j_fb_m(self, *, wvlnm: float, T_K: float) -> float:
+        return self.j_fb_Hz(nuHz=cns.nm2Hz_f(wvlnm), T_K=T_K)*cns.light_c/(wvlnm*cns.nm2m)**2
+
+    def avg_j_fb_Hz(self, *, wv_rng: WVRng, T_K: float, num_point: int = 100) -> float:
         j_seq = [self.j_fb_Hz(nuHz=_nu, T_K=T_K)
                  for _nu in np.linspace(wv_rng.nuHz[0], wv_rng.nuHz[1], num=num_point)]
         return np.mean(j_seq)
@@ -144,29 +161,32 @@ class Composition(AbsComp):
     def kappa_bf(self, *, nuHz: float, T_K: float) -> float:
         kappa = 0
         for _i in range(self.n_spcs):
-            kappa = kappa + self.bf_cs[_i].norm_cs(nuHz=nuHz, T_K=T_K)*self.nj[_i] / \
-                self.spcs[_i].qint(T_K=T_K)
+            kappa = kappa + self.bf_cs[_i].norm_cs(nuHz=nuHz, T_K=T_K)*self.nj[_i]/ \
+                    self.spcs[_i].qint(T_K=T_K)
         return kappa*(1 - exp(-nuHz*Hz2K/T_K))
 
     # ------------------------------------------------------------------------------------------- #
     # bound-bound transition
     # ------------------------------------------------------------------------------------------- #
+    def j_bb_m(self, *, wv):
+        pass
+
     def avg_j_bb_Hz(self, *, wv_rng: WVRng, T_K: float) -> float:
         return np.dot(self.nj, [_spc.norm_j_bb(T_K=T_K, wvlnm_rng=wv_rng.wvlnm)
                                 for _spc in self.spcs])/wv_rng.D_nuHz
 
     def avg_kappa_bb(self, *, wv_rng: WVRng, T_K: float):
-        return self.avg_j_bb_Hz(T_K=T_K, wv_rng=wv_rng)* wv_rng.D_nuHz / \
+        return self.avg_j_bb_Hz(T_K=T_K, wv_rng=wv_rng)*wv_rng.D_nuHz/ \
             integral_Bnu(T_K=T_K, nuHz_rng=wv_rng.nuHz)
 
     # ------------------------------------------------------------------------------------------- #
     def avg_j_Hz(self, *, wv_rng: WVRng, T_K: float) -> float:
         return self.avg_j_ff_Hz(wv_rng=wv_rng, T_K=T_K) + \
             self.avg_j_fb_Hz(wv_rng=wv_rng, T_K=T_K) + \
-            self.avg_j_bb_Hz(wv_rng=wv_rng,T_K=T_K)
+            self.avg_j_bb_Hz(wv_rng=wv_rng, T_K=T_K)
 
     def avg_kappa(self, *, wv_rng: WVRng, T_K: float) -> float:
-        return self.avg_j_Hz(T_K=T_K, wv_rng=wv_rng) / avgBnu(nuHz_rng=wv_rng.nuHz, T_K=T_K)
+        return self.avg_j_Hz(T_K=T_K, wv_rng=wv_rng)/avgBnu(nuHz_rng=wv_rng.nuHz, T_K=T_K)
 
     # ------------------------------------------------------------------------------------------- #
     def get_rho(self):
@@ -176,6 +196,7 @@ class Composition(AbsComp):
         return np.dot(self.nj, [_spc.get_h(T_K=T_K) for _spc in self.spcs])/self.get_rho()
 
     def set_lte_comp(self, *, p_atm, T_K, elem_comp) -> None:
+        # ln N
         elem_bj = tuple(elem_comp[_spc] for _spc in self.elems)
         self.T_K = T_K
         self.p_atm = p_atm
@@ -196,7 +217,7 @@ class Composition(AbsComp):
             Mkk[-1, :-1] = np.dot(self.Aij, Nj)
             Mkk[-1, -1] = Nj.sum() - N
             bk[:-1] = elem_bj - np.dot(self.Aij, Nj) + \
-                np.dot(self.Aij, Nj*rdcd_mu)
+                      np.dot(self.Aij, Nj*rdcd_mu)
             bk[-1] = N - Nj.sum() + np.dot(Nj, rdcd_mu)
             sol = np.linalg.solve(Mkk, bk)
             dlnN = sol[-1]

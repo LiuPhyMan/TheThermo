@@ -1,16 +1,24 @@
 from math import exp, pi, sqrt, log
 
 import numpy as np
-from myconst import c as light_c, h, Hz2K, nm2Hz_f, nm2cm, h, m_e, kB
+from myconst import c as light_c, h, Hz2K, nm2Hz_f, nm2cm, h, m_e, kB, nm2m, K2eV
 
 
-def Bnu(*, nuHz, T_K):
-    try:
-        tmp = 1/(exp(nuHz*Hz2K/T_K) - 1)
-    except:
-        tmp = 0
+def Bnu(*, nuHz, T_K: float):
+    r""" Planck function in wavelength [m]"""
+    # try:
+    #     tmp = 1/(exp(nuHz*Hz2K/T_K) - 1)
+    # except:
+    #     tmp = 0
+    tmp = 1/(np.exp(nuHz*Hz2K/T_K) - 1)
     return 2*h*nuHz**3/light_c**2*tmp
 
+# def B_nm(*, wvlnm, T_K):
+#     return Bnu(nuHz=nm2Hz_f(wvlnm), T_K=T_K)*light_c/(wvlnm*1e-9)**2 *1e-9
+
+def Bl_m(*, wvlnm, T_K: float):
+    r""" Planck function in wavelength [m]"""
+    return Bnu(nuHz=nm2Hz_f(wvlnm), T_K=T_K)*light_c/(wvlnm*1e-9)**2
 
 def avgBnu(*, nuHz_rng: tuple[float], T_K: float) -> float:
     return integral_Bnu(T_K=T_K, nuHz_rng=nuHz_rng)/(nuHz_rng[1] - nuHz_rng[0])
@@ -51,4 +59,8 @@ def Le_th(T_K: float) -> float:
 
 def CoulombLogarithm(*, ne: float, T_K: float, Zi:int=1) -> float:
     r"""Standard unit."""
-    return 15.233732608189301 + 1.5*log(T_K) - 0.5*log(ne) - log(Zi)
+    # return 15.233732608189301 + 1.5*log(T_K) - 0.5*log(ne) - log(Zi)
+    return 23 + 1.5*log(T_K*K2eV) - 0.5*log(ne*1e-6) - log(Zi)
+
+def rdcdM(M1, M2):
+    return M1 * M2 / (M1 + M2)
