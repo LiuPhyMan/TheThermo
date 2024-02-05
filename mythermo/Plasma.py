@@ -168,14 +168,14 @@ class LTEPlasma(object):
                     H[iRow, jCol] += np.sum(A1[iRow])
         H = H*2/5/kB/self.T_K
         return H
-    
+
     def get_L_mtx(self, *, p, q, T_K):
         def get_c(_cc):
             if isinstance(_cc, tuple):
-                return _cc[0] * _cc[1]
+                return _cc[0]*_cc[1]
             else:
                 return _cc
-            
+
         if p > q:
             return self.get_L_mtx(p=q, q=p, T_K=T_K).transpose()
         # Init
@@ -205,8 +205,8 @@ class LTEPlasma(object):
                 L[iRow, jCol] = N2[iRow, jCol]
                 if iRow == jCol:
                     L[iRow, jCol] += np.sum(N1[iRow])
-                L[iRow, jCol] = L[iRow, jCol] * sqrt(self.comp.absM[iRow]*self.comp.absM[jCol])
-        L = L * 8 / 75/kB**2/self.T_K
+                L[iRow, jCol] = L[iRow, jCol]*sqrt(self.comp.absM[iRow]*self.comp.absM[jCol])
+        L = L*8/75/kB**2/self.T_K
         return L
 
     def get_eta_order_2(self, *, T_K: float) -> float:
@@ -295,10 +295,18 @@ class LTEPlasma(object):
                        np.hstack((L10, L11, L12)),
                        np.hstack((L20, L21, L22))))
         x = np.hstack((np.zeros(self.comp.n_spcs), self.comp.xj, np.zeros(self.comp.n_spcs)))
-        a = np.linalg.solve(L, x)
+        # print(L.diagonal())
+        # print(x)
+        try:
+            a = np.linalg.solve(L, x)
+        except:
+            diag = np.copy(L.diagonal())
+            diag[diag == 0] = 1e-80*np.mean(diag[diag != 0])
+            for _i, _vl in enumerate(diag):
+                L[_i, _i] = _vl
+            a = np.linalg.solve(L, x)
         # return np.dot(self.comp.xj, a[self.comp.n_spcs:(2*self.comp.n_spcs)])
-        return np.dot(self.comp.xj[1:], a[(self.comp.n_spcs+1):(2*self.comp.n_spcs)])
-
+        return np.dot(self.comp.xj[1:], a[(self.comp.n_spcs + 1):(2*self.comp.n_spcs)])
 
         # inv_L_mtx = np.linalg.inv(self.get_L_mtx()[1:, 1:])
         # return -4*np.dot(self.comp.xj[1:].dot(inv_L_mtx), self.comp.xj[1:])
@@ -324,11 +332,11 @@ class LTEPlasma(object):
                        np.hstack((L10, L11, L12, L13)),
                        np.hstack((L20, L21, L22, L23)),
                        np.hstack((L30, L31, L32, L33))))
-        x = np.hstack((np.zeros(self.comp.n_spcs), self.comp.xj, 
+        x = np.hstack((np.zeros(self.comp.n_spcs), self.comp.xj,
                        np.zeros(self.comp.n_spcs), np.zeros(self.comp.n_spcs)))
         a = np.linalg.solve(L, x)
         return np.dot(self.comp.xj, a[self.comp.n_spcs:2*self.comp.n_spcs])
-        
+
     # ------------------------------------------------------------------------------------------- #
     #   Cal k_e
     # ------------------------------------------------------------------------------------------- #
@@ -377,14 +385,19 @@ class LTEPlasma(object):
                 tmp = 0
                 for k in range(self.comp.n_spcs - 1):
                     for l in range(k + 1, self.comp.n_spcs):
-                        tmp1 = -self.rctn_Rik[i, k]*self.rctn_Rik[j, l] - \
-                               self.rctn_Rik[i, l]*self.rctn_Rik[j, k] + \
-                               self.rctn_Rik[i, k]*self.rctn_Rik[j, k]*self.comp.xj[l]/ \
-                               self.comp.xj[k] + \
-                               self.rctn_Rik[i, l]*self.rctn_Rik[j, l]*self.comp.xj[k]/ \
-                               self.comp.xj[l]
-                        tmp = tmp + tmp1*self._mu_ij(k, l)*self.Omega_ij(k, l, index=(1, 1))
+                        with np.errstate(divide='ignore', invalid='ignore'):
+                            tmp1 = -self.rctn_Rik[i, k]*self.rctn_Rik[j, l] - \
+                                self.rctn_Rik[i, l]*self.rctn_Rik[j, k] + \
+                                self.rctn_Rik[i, k]*self.rctn_Rik[j, k]*self.comp.xj[l]/ \
+                                self.comp.xj[k] + \
+                                self.rctn_Rik[i, l]*self.rctn_Rik[j, l]*self.comp.xj[k]/ \
+                                self.comp.xj[l]
+                            tmp = tmp + tmp1*self._mu_ij(k, l)*self.Omega_ij(k, l, index=(1, 1))
                 Aij[i, j] = tmp*16/(3*kB*self.T_K)
-        dH = np.dot(self.rctn_Rik, [_spc.Hf for _spc in self.comp.spcs])*eV2J
+        # dH = np.dot(self.rctn_Rik, [_spc.Hf for _spc in self.comp.spcs])*eV2J
+        dH = np.dot(self.rctn_Rik, [_spc.get_h(T_K=self.T_K) for _spc in self.comp.spcs])
         b = np.linalg.solve(Aij, dH)
-        return 1/kB/self.T_K**2*np.dot(dH, b)
+        result = 1/kB/self.T_K**2*np.dot(dH, b)
+        if np.isnan(result):
+            return 0.0
+        return result
