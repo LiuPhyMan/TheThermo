@@ -1,3 +1,3 @@
-path = __path__[0]
-
+from ._comp import Composition
 from ._func import gff, gffint
+from ._plasma import PlasmaComp
