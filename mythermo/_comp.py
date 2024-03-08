@@ -14,7 +14,7 @@ from myconst import (atm, Hz2K, kB, e, epsilon_0, Hz2nm_f, m2Hz_f,
                      light_c as C)
 from myspecie import spc_dict
 
-from . import gff, gffint
+from ._func import gff, gffint
 from .basic import Bnu
 
 
