@@ -10,7 +10,7 @@ from typing import List, NoReturn
 
 import myconst as cns
 import numpy as np
-from myconst import (atm, Hz2K, kB, e, epsilon_0, Hz2nm_f, m2Hz_f,
+from myconst import (atm, Hz2K, e, epsilon_0, Hz2nm_f, m2Hz_f, kB, atm2Pa,
                      light_c as C)
 from myspecie import spc_dict
 
@@ -149,7 +149,7 @@ class Composition(_AbsComp):
       assert specSpc in self.spcs_str
       assert self.Zc[self.spcs_str.index(specSpc)] > 0
       tmp = sum([self.Zc[_i]**2*gffint(T_K=T_K, Z=self.Zc[_i])*self.nj[_i]
-                 for _i in range(self.n_spcs) if self.spcs_str[_i] == specSpc])
+                 for _i in range(self.n_spcs) if self.spcs_str[_i]==specSpc])
     return 1.1344220e-41*self.ne*sqrt(T_K)*tmp
 
   def kappa_ff(self, *, nuHz: float, T_K: float) -> float:
@@ -217,11 +217,8 @@ class Composition(_AbsComp):
     return np.dot(self.nj,
                   [_spc.get_h(T_K=T_K) for _spc in self.spcs])/self.get_rho()
 
-  def set_lte_comp(self, *, p_atm, T_K, elem_comp) -> NoReturn:
-    # ln N
+  def _minimize_gibbs(self, *, rdcd_mu0, p_atm, elem_comp, n_iter_max=500):
     elem_bj = tuple(elem_comp[_spc] for _spc in self.elems)
-    self.T_K = T_K
-    self.p_atm = p_atm
     Nj = np.ones(self.n_spcs)/self.n_spcs
     N = 1
     lnN = N
@@ -231,8 +228,7 @@ class Composition(_AbsComp):
     bk = np.zeros(self.n_elem + 1)
     # LJm-factor
     factor = np.ones(self.n_spcs)
-    rdcd_mu0 = self.rdcd_mu0(T_K=T_K)
-    for _i in range(500):
+    for _i in range(n_iter_max):
       # check whether log(Nj) is nan.
       with np.errstate(divide='ignore'):
         _lnNj_tmp = np.nan_to_num(np.log(Nj), neginf=-512)
@@ -249,12 +245,12 @@ class Composition(_AbsComp):
       dlnN = sol[-1]
       dlnNj = dlnN + np.dot(sol[:-1], self.Aij) - rdcd_mu
       for j in range(self.n_spcs):
-        if (lnNj[j] - lnN) > -18.420680743952367:
+        if (lnNj[j] - lnN) > -log(1e8):
           factor[j] = 2/abs(dlnNj[j]) if (abs(dlnNj[j]) >= 2) else 1
         elif dlnNj[j] >= 0:
           with np.errstate(divide='ignore'):
-            factor[j] = abs(
-              (lnNj[j] - lnN + 9.210340371976182)/(dlnNj[j] - dlnN))
+            factor[j] = abs((lnNj[j] - lnN + log(1e4))/ \
+                            (dlnNj[j] - dlnN))
         else:
           factor[j] = (2/(5*abs(dlnN))) if (abs(dlnN) > 2.5) else 1
       e_factor = min(1, np.min(factor))
@@ -264,8 +260,81 @@ class Composition(_AbsComp):
       Nj = np.exp(lnNj)
       if np.all(Nj*np.abs(dlnNj)/Nj.sum() <= 1e-25):
         break
+    return Nj
+
+  def set_lte_comp(self, *, p_atm, T_K, elem_comp, theta=1) -> NoReturn:
+    r"""
+
+    Parameters
+    ----------
+    p_atm
+    T_K
+    elem_comp
+    theta:
+      Te/Th
+
+    """
+    # ln N
+    self.T_K = T_K
+    self.p_atm = p_atm
+    Te_K = self.T_K*theta
+    # LJm-factor
+    rdcd_mu0 = np.array([_.rdcd_mu0(T_trans=T_K, T_int=Te_K) if _.spc_str=="e" else
+                         _.rdcd_mu0(T_trans=T_K, T_int=Te_K) for _ in self.spcs])
+
+    # rdcd_mu0 = []
+    # for _i in range(self.n_spcs):
+    #   if self.spcs_str[_i]=="e":
+    #     T_trans, T_int = Te_K, Te_K
+    #   else:
+    #     T_trans, T_int = T_K, Te_K
+    #   rdcd_mu0.append(self.spcs[_i].rdcd_mu0(T_trans=T_trans, T_int=T_int))
+    # rdcd_mu0 = np.asarray(rdcd_mu0)
+
+    Nj = self._minimize_gibbs(rdcd_mu0=rdcd_mu0, p_atm=p_atm,
+                              elem_comp=elem_comp)
     self.xj = Nj/Nj.sum()
-    self.nj = self.xj*p_atm*atm/(kB*T_K)
+    V = Nj.sum()*cns.kB*T_K/(p_atm*atm)
+    self.nj = Nj/V
+
+  def set_nlte_comp(self, *, p_atm, T_K, elem_comp, theta=1) -> NoReturn:
+    r"""
+    spc    T_t,   T_int
+    0,     T_0,   T_1
+    1,     T_0,   T_1
+    2,     T_0,   T_1
+
+    """
+    Te_K = T_K*theta
+    self.T_K = T_K
+    # self.p_atm = p_atm
+    # ln N
+    # rdcd_mu0 = np.array([_.rdcd_mu0(T_K=Te_K) if _.spc_str=="e" else
+    #                      _.rdcd_mu0(T_K=self.T_K) for _ in self.spcs])
+    rdcd_mu0 = []
+    for _i in range(self.n_spcs):
+      if self.spcs_str[_i]=="e":
+        T_trans, T_int = Te_K, Te_K
+      else:
+        T_trans, T_int = T_K, Te_K
+      rdcd_mu0.append(self.spcs[_i].rdcd_mu0(T_trans=T_trans, T_int=T_int))
+    rdcd_mu0 = np.asarray(rdcd_mu0)
+    rdcd_mu0[0] *= theta
+
+    p_virt = p_atm
+    while True:
+      Nj = self._minimize_gibbs(rdcd_mu0=rdcd_mu0, p_atm=p_virt,
+                                elem_comp=elem_comp)
+      x = Nj[self.spcs_str.index("e")]/Nj.sum()
+      p_real = p_virt*(1 + x*(theta - 1))
+      if abs(p_real - p_atm) < 0.01:
+        break
+      p_virt *= p_atm/p_real
+    Nj = self._minimize_gibbs(rdcd_mu0=rdcd_mu0, p_atm=p_virt,
+                              elem_comp=elem_comp)
+    self.xj = Nj/Nj.sum()
+    V = (Nj.sum() + Nj[self.spcs_str.index("e")]*(theta - 1))*kB*T_K/(p_atm*atm2Pa)
+    self.nj = Nj/V
 
   def set_comp_by_dict(self, *, _dict: dict, default_value=0) -> NoReturn:
     self.nj = np.zeros(self.n_spcs)

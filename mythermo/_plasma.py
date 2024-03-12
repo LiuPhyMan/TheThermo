@@ -29,7 +29,7 @@ class PlasmaComp(object):
     ----------
     spcs_str
     """
-    assert spcs_str[0] == "e"
+    assert spcs_str[0]=="e"
     self.comp = Composition(spcs_str=spcs_str)
     self.p_atm = None
     self.T_K = None
@@ -46,15 +46,24 @@ class PlasmaComp(object):
   #   self.comp.T_K = T_K
 
   def set_elem_comp(self, **kwargs):
+    assert set(list(kwargs.keys()) + ['e'])==set(self.comp.elems), \
+      self.comp.elems
     if 'e' in kwargs:
       self.elem_comp = kwargs
     else:
       self.elem_comp = dict(kwargs, **dict(e=0))
 
-  def set_lte_comp(self, *, p_atm, T_K):
+  def set_lte_comp(self, *, p_atm, T_K, theta=1):
     self.p_atm = p_atm
     self.T_K = T_K
-    self.comp.set_lte_comp(p_atm=p_atm, T_K=T_K, elem_comp=self.elem_comp)
+    self.comp.set_lte_comp(p_atm=p_atm, T_K=T_K,
+                           elem_comp=self.elem_comp, theta=theta)
+
+  def set_nlte_comp(self, *, p_atm, T_K, theta=1):
+    self.p_atm = p_atm
+    self.T_K = T_K
+    self.comp.set_nlte_comp(p_atm=p_atm, T_K=T_K, elem_comp=self.elem_comp,
+                            theta=theta)
 
   def set_elements(self, elems: tuple):
     self.comp.set_elements(elems)
@@ -92,7 +101,7 @@ class PlasmaComp(object):
 
   def get_ci_paras(self, spc1, spc2):
     for _para in self.ci_paras_list:
-      if {spc1, spc2} == set(_para[0].split()):
+      if {spc1, spc2}==set(_para[0].split()):
         return _para
     return False
 
@@ -197,7 +206,7 @@ class PlasmaComp(object):
     for iRow in range(self.comp.n_spcs):
       for jCol in range(self.comp.n_spcs):
         H[iRow, jCol] = A2[iRow, jCol]
-        if iRow == jCol:
+        if iRow==jCol:
           H[iRow, jCol] += np.sum(A1[iRow])
     H = H*2/5/kB/self.T_K
     return H
@@ -238,7 +247,7 @@ class PlasmaComp(object):
     for iRow in range(self.comp.n_spcs):
       for jCol in range(self.comp.n_spcs):
         L[iRow, jCol] = N2[iRow, jCol]
-        if iRow == jCol:
+        if iRow==jCol:
           L[iRow, jCol] += np.sum(N1[iRow])
         L[iRow, jCol] = L[iRow, jCol]*sqrt(
           self.comp.absM[iRow]*self.comp.absM[jCol])
@@ -282,7 +291,7 @@ class PlasmaComp(object):
     for i in range(self.comp.n_spcs):
       tmp = 0
       for k in range(self.comp.n_spcs):
-        if k == i:
+        if k==i:
           continue
         mu_i = self.comp.absM[i]/(self.comp.absM[i] + self.comp.absM[k])
         mu_k = self.comp.absM[k]/(self.comp.absM[i] + self.comp.absM[k])
@@ -343,7 +352,7 @@ class PlasmaComp(object):
       a = np.linalg.solve(L, x)
     except:
       diag = np.copy(L.diagonal())
-      diag[diag == 0] = 1e-40*np.mean(diag[diag != 0])  # A trick.
+      diag[diag==0] = 1e-40*np.mean(diag[diag!=0])  # A trick.
       for _i, _vl in enumerate(diag):
         L[_i, _i] = _vl
       a = np.linalg.solve(L, x)
