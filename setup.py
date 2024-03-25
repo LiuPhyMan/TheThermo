@@ -22,7 +22,7 @@ VERSION = '2.1.0'
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    'numpy', 'myconst', 'myspecie',
+    'numpy', 'myconst', 'myspecie'
 ]
 
 # What packages are optional?

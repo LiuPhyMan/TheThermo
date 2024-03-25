@@ -10,7 +10,8 @@ from myconst import light_c, Hz2K, nm2Hz_f, nm2cm, h, m_e, kB, K2eV
 
 
 def Bnu(*, nuHz, T_K: float):
-  r""" Planck function in wavelength [Hz]"""
+  r""" Planck function in wavelength [Hz]
+  unit: W m^-2 Hz^-1 sr^-1"""
   # try:
   #     tmp = 1/(exp(nuHz*Hz2K/T_K) - 1)
   # except:
@@ -23,7 +24,8 @@ def Bnu(*, nuHz, T_K: float):
 #     return Bnu(nuHz=nm2Hz_f(wvlnm), T_K=T_K)*light_c/(wvlnm*1e-9)**2 *1e-9
 
 def Bl_m(*, wvlnm, T_K: float):
-  r""" Planck function in wavelength [m]"""
+  r""" Planck function in wavelength [m]
+  unit: W m^-2 m^-1 sr^-1"""
   return Bnu(nuHz=nm2Hz_f(wvlnm), T_K=T_K)*light_c/(wvlnm*1e-9)**2
 
 

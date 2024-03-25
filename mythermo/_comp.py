@@ -11,11 +11,14 @@ from typing import List, NoReturn
 import myconst as cns
 import numpy as np
 from myconst import (atm, Hz2K, e, epsilon_0, Hz2nm_f, m2Hz_f, kB, atm2Pa,
-                     light_c as C)
+                     Ry_eV,
+                     light_c as C, fine_structure as fs_const, Hz2eV,
+                     bohr_radius as a0)
 from myspecie import spc_dict
 
 from ._func import gff, gffint
 from .basic import Bnu
+from .basic import Le_th, CoulombLogarithm as CL
 
 
 class _AbsComp(object):
@@ -107,6 +110,7 @@ class Composition(_AbsComp):
 
   @property
   def eleFreq(self):
+    r""""""
     return 8.97866758337293*sqrt(self.ne)
 
   def refracIndex(self, *, laser_wvl):
@@ -128,7 +132,7 @@ class Composition(_AbsComp):
   # ------------------------------------------------------------------------- #
   def j_ff_Hz(self, *, nuHz: float, T_K: float) -> float:
     r""" Bremsstrahlung (free-free, electron-ion) emission per Hz
-          in the unit of W m^-2 sr^-1 Hz^-1. """
+          in the unit of W m^-3 sr^-1 Hz^-1. """
     tmp = sum([self.Zc[_i]**2*self.nj[_i]*gff(wvlnm=Hz2nm_f(nuHz),
                                               T_K=T_K, Z=self.Zc[_i])
                for _i in range(self.n_spcs) if self.Zc[_i] > 0])
@@ -136,12 +140,12 @@ class Composition(_AbsComp):
 
   def j_ff_m(self, *, wvlnm: float, T_K: float) -> float:
     r""" Bremsstrahlung (free-free, electron-ion) emission per m
-          in the unit of W m^-2 sr^-1 m^-1. """
+          in the unit of W m^-3 sr^-1 m^-1. """
     return self.j_ff_Hz(nuHz=cns.nm2Hz_f(wvlnm), T_K=T_K)*C/(wvlnm*cns.nm2m)**2
 
   def tot_j_ff(self, *, T_K: float, specSpc: str = None) -> float:
     r""" Bremsstrahlung (free-free, electron-ion) emission
-          in the unit of W m^-2 sr^-1. """
+          in the unit of W m^-3 sr^-1. """
     if specSpc is None:
       tmp = sum([self.Zc[_i]**2*gffint(T_K=T_K, Z=self.Zc[_i])*self.nj[_i]
                  for _i in range(self.n_spcs) if self.Zc[_i] > 0])
@@ -154,6 +158,18 @@ class Composition(_AbsComp):
 
   def kappa_ff(self, *, nuHz: float, T_K: float) -> float:
     return self.j_ff_Hz(nuHz=nuHz, T_K=T_K)/Bnu(nuHz=nuHz, T_K=T_K)
+
+  def kappa_ff_laser(self, *, nuHz: float, T_K: float) -> float:
+    _const = 32/3*fs_const*a0**2*(Ry_eV/(nuHz*Hz2eV))**2*Le_th(T_K)**3/ \
+             sqrt(1 - self.eleFreq**2/nuHz**2)
+    tmp = 0
+    for _i in range(self.n_spcs):
+      if self.Zc[_i] > 0:
+        tmp += self.Zc[_i]**2*self.nj[_i]* \
+               CL(ne=self.ne, T_K=T_K, Zi=self.Zc[_i])
+      else:
+        continue
+    return _const*tmp*self.ne
 
   # ------------------------------------------------------------------------- #
   # free-bound transition
@@ -279,8 +295,9 @@ class Composition(_AbsComp):
     self.p_atm = p_atm
     Te_K = self.T_K*theta
     # LJm-factor
-    rdcd_mu0 = np.array([_.rdcd_mu0(T_trans=T_K, T_int=Te_K) if _.spc_str=="e" else
-                         _.rdcd_mu0(T_trans=T_K, T_int=Te_K) for _ in self.spcs])
+    rdcd_mu0 = np.array(
+      [_.rdcd_mu0(T_trans=T_K, T_int=Te_K) if _.spc_str=="e" else
+       _.rdcd_mu0(T_trans=T_K, T_int=Te_K) for _ in self.spcs])
 
     # rdcd_mu0 = []
     # for _i in range(self.n_spcs):
@@ -333,7 +350,8 @@ class Composition(_AbsComp):
     Nj = self._minimize_gibbs(rdcd_mu0=rdcd_mu0, p_atm=p_virt,
                               elem_comp=elem_comp)
     self.xj = Nj/Nj.sum()
-    V = (Nj.sum() + Nj[self.spcs_str.index("e")]*(theta - 1))*kB*T_K/(p_atm*atm2Pa)
+    V = (Nj.sum() + Nj[self.spcs_str.index("e")]*(theta - 1))*kB*T_K/(
+        p_atm*atm2Pa)
     self.nj = Nj/V
 
   def set_comp_by_dict(self, *, _dict: dict, default_value=0) -> NoReturn:
